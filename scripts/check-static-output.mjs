@@ -3,11 +3,16 @@ import {join} from 'node:path';
 
 const blockedNames = /^(?:\.env(?:\..*)?|\.dev\.vars(?:\..*)?|\.git|\.wrangler|\.sites-runtime|\.openai|node_modules|server)$/;
 const base = (process.env.PAGES_BASE_PATH || '/').replace(/\/$/, '') + '/';
-async function checkAsset(value, documentPath = '') {
-  if (value.startsWith('data:') || value.startsWith('#')) return;
+function assetPath(value, documentPath = '') {
+  if (value.startsWith('data:') || value.startsWith('#')) return null;
   const url = new URL(value, 'https://pages.test' + base + documentPath);
   if (url.origin !== 'https://pages.test' || !url.pathname.startsWith(base)) throw new Error(`Asset escapes the Pages base path: ${value}`);
-  const file = join('dist', decodeURIComponent(url.pathname.slice(base.length)));
+  return decodeURIComponent(url.pathname.slice(base.length));
+}
+async function checkAsset(value, documentPath = '') {
+  const path = assetPath(value, documentPath);
+  if (path === null) return;
+  const file = join('dist', path);
   if (!(await stat(file)).isFile()) throw new Error(`Missing built asset: ${value}`);
 }
 async function inspect(directory) {
@@ -37,8 +42,11 @@ for (const entry of ['index.html', 'about.html', 'albums.html']) {
     }
     if (/^<img\b/i.test(tag[0])) {
       const image = tag[0];
-      if (/\bsrc="[^"]*\/photos\//.test(image)) throw new Error(`Original photograph used as an inline image in ${entry}`);
-      if (image.includes('/generated/images/')) {
+      const src = image.match(/\bsrc="([^"]+)"/i)?.[1];
+      const path = src ? assetPath(src, entry) : null;
+      // Inspect the path inside the site: the repository itself may be named "photos".
+      if (path?.startsWith('photos/')) throw new Error(`Original photograph used as an inline image in ${entry}`);
+      if (path?.startsWith('generated/images/')) {
         if (!/\bsrcset=/i.test(image) || !/\bwidth="\d+"/.test(image) || !/\bheight="\d+"/.test(image) || !image.includes('decoding="async"')) throw new Error(`Missing responsive image/loading attributes in ${entry}`);
         if (image.includes('fetchPriority="high"') || image.includes('fetchpriority="high"')) priorityPhotos++;
       }
