@@ -9,7 +9,7 @@ export default function PanoramaCover({src, alt, priority = false, fullScreen = 
   const viewport = useRef<HTMLDivElement>(null);
   const asset = (assets as Record<string, ImageAsset>)[src];
   const ratio = asset ? asset.width / asset.height : 3;
-  const sizes = `max(${fullScreen ? 100 : 50 * coverColumns}vw, ${Math.ceil(ratio * (fullScreen ? 100 : 50))}vh)`;
+  const sizes = `max(${fullScreen ? 100 : 50 * coverColumns}vw, ${Math.ceil(ratio * (fullScreen ? 100 : 50))}svh)`;
 
   useEffect(() => {
     const element = viewport.current;

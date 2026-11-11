@@ -1,5 +1,32 @@
 export type UmamiConfig = {websiteId: string; scriptUrl: string};
 export type UmamiPayload = Record<string, unknown>;
+export type AnalyticsData = Record<string, string | number | boolean>;
+export type UmamiTracker = {track: (payload: (defaults: UmamiPayload) => UmamiPayload) => unknown};
+
+let eventReporter: (name: string, data: AnalyticsData) => void = () => {};
+export function configureAnalyticsEvents(reporter: typeof eventReporter) {eventReporter = reporter;}
+export function trackAnalyticsEvent(name: string, data: AnalyticsData) {eventReporter(name, data);}
+
+export function createAnalyticsEventQueue(getTracker: () => UmamiTracker | undefined, getContext: (data: AnalyticsData) => UmamiPayload) {
+  const pending: UmamiPayload[] = [];
+  function flush() {
+    const tracker = getTracker();
+    if (!tracker) return;
+    for (const event of pending.splice(0)) {
+      try {void Promise.resolve(tracker.track(defaults => ({...defaults, ...event}))).catch(() => {});} catch { /* Analytics must not interrupt the viewer. */ }
+    }
+  }
+  return {
+    record(name: string, data: AnalyticsData) {
+      // Bound memory if the tracker is blocked; retain each event's original photo context.
+      if (pending.length === 50) pending.shift();
+      pending.push({...getContext(data), name, data: {...data}, timestamp: Math.floor(Date.now() / 1000)});
+      flush();
+    },
+    flush,
+    clear() {pending.length = 0;},
+  };
+}
 
 // Reporting paths only: the browser continues using GitHub Pages-compatible query URLs.
 export function labelGalleryPageview(type: string, payload: UmamiPayload, base: string): UmamiPayload {
@@ -48,4 +75,5 @@ export function installUmami(config: UmamiConfig | null, document: Pick<Document
   script.setAttribute('data-exclude-hash', 'true');
   script.setAttribute('data-before-send', 'stillframeUmamiBeforeSend');
   document.head.appendChild(script);
+  return script;
 }

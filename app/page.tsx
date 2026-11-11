@@ -29,7 +29,7 @@ const homePhoto = homepagePhoto(photos, site.homePhotoId);
 const showPhotoIds = import.meta.env.DEV && 'showPhotoIds' in site && site.showPhotoIds === true;
 
 export default function Gallery() {
-  const [locationState, updateLocation] = useGalleryUrl(photos, albums);
+  const [locationState, updateLocation, galleryRequested] = useGalleryUrl(photos, albums);
   const {tags: urlTags, query, showSamples, photoId, albumId} = locationState;
   const [showMoreTags, setShowMoreTags] = useState(false);
   const selected = photos.find(photo => photo.id === photoId) ?? null;
@@ -52,6 +52,7 @@ export default function Gallery() {
   const hasMoreTags = tags.length > collapsedTags.length;
   const filtered = prioritizeAlbumHighlights(selectPhotos(collection, {tags: activeTags, query, sort: activeAlbum ? 'tag-variety' : 'tag-cycle', showSamples}), activeAlbum);
   const collectionKey = JSON.stringify([albumId, [...activeTags].sort(), query, showSamples]);
+  const showGallery = Boolean(activeAlbum || galleryRequested || selected || activeTags.length || query);
 
   function openPhoto(photo: Photo) {updateLocation({photoId: photo.id}, 'push', 'gallery');}
   function changeCollection(change: GalleryUrlChange, section: GallerySection) {
@@ -84,7 +85,7 @@ export default function Gallery() {
     openPhoto(index < 0 ? filtered[direction > 0 ? 0 : filtered.length - 1] : filtered[(index + direction + filtered.length) % filtered.length]);
   }
 
-  useEffect(() => restoreGalleryScroll(window, document), [albumId]);
+  useEffect(() => restoreGalleryScroll(window, document), [albumId, showGallery]);
   useEffect(() => () => {transitions.current?.dispose(); transitions.current = null;}, []);
 
   useEffect(() => {
@@ -128,7 +129,7 @@ export default function Gallery() {
   </>;
 
   return <>
-    {!activeAlbum && (homePhoto || featured.portrait && featured.landscape) && <section className="home-hero" aria-labelledby="welcome-title">
+    {!showGallery && (homePhoto || featured.portrait && featured.landscape) && <section className="home-hero" aria-labelledby="welcome-title">
         <div className="hero-photo">
           {homePhoto ? <PanoramaCover src={homePhoto.src} alt={homePhoto.title || 'Featured panorama'} panStart={homePhoto.panStart} fullScreen priority/>
             : <OptimizedImage src={featured.portrait!.src} landscapeSrc={featured.landscape!.src} alt="Featured photograph" sizes="100vw" priority/>}
@@ -138,10 +139,10 @@ export default function Gallery() {
         </div>
         <a className="hero-scroll" href="#albums">{albums.length ? 'Explore the albums' : 'Explore the gallery'} <ArrowDown size={16} aria-hidden="true"/></a>
     </section>}
-    {!activeAlbum ? <div id="albums" className="albums-screen" tabIndex={-1}>
+    {!showGallery ? <main id="albums" className="albums-screen home-albums" tabIndex={-1}>
       <AlbumGrid albums={albums} photos={photos} embedded onOpen={openAlbum} onShowAll={showAllPhotos}/>
-    </div> : null}
-    <div id="gallery" className="gallery-scene" key={activeAlbum?.id ?? 'all-photos'} tabIndex={-1}>
+    </main> : null}
+    {showGallery && <div id="gallery" className="gallery-scene" key={activeAlbum?.id ?? 'all-photos'} tabIndex={-1}>
       {activeAlbum && albumCover && <section className="album-hero" aria-labelledby="album-heading">
         <OptimizedImage src={albumCover.src} alt={albumCover.title || activeAlbum.title + ' album cover'} sizes="100vw" priority/>
         <div className="album-hero-topline">
@@ -157,6 +158,7 @@ export default function Gallery() {
         </div>
       </section>}
     <main>
+      {!activeAlbum && <a className="back-to-albums full-gallery-back" href={`${import.meta.env.BASE_URL}#albums`} onClick={event => {if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); backToAlbums();}}><ArrowLeft size={16} aria-hidden="true"/> Back to albums</a>}
       <section className={'library' + (activeAlbum ? ' album-photo-library' : '')} aria-label="Photo library">
         {!activeAlbum && galleryControls}
         {filtered.length ? <PhotoCollection key={collectionKey} photos={filtered} paginated={Boolean(activeAlbum)} renderPhoto={(photo, index) => <article className="photo-card" key={photo.id}>
@@ -170,14 +172,14 @@ export default function Gallery() {
       </section>
       {activeAlbum && <AlbumNavigation album={activeAlbum} previous={previousAlbum} next={nextAlbum} photos={photos} onOpen={openAlbum} onBack={backToAlbums} onShowAll={showAllPhotos}/>}
     </main>
-    </div>
+    </div>}
     <SiteFooter/>
     <dialog ref={dialog} className={'modal photo-modal' + (isPanorama ? ' panorama-modal' : '')} onCancel={event => {event.preventDefault(); close();}} onClick={event => {if (event.target === event.currentTarget) close();}} aria-labelledby={selected?.title ? 'dialog-title' : undefined} aria-label={selected?.title ? undefined : isPanorama ? 'Panorama viewer' : 'Photo viewer'} aria-describedby={selected?.description ? 'photo-description' : undefined}>
       {selected && <>
         <button className="close-modal" onClick={close} aria-label="Close photo"><X size={21}/></button>
         <div className={'viewer' + (hasPhotoDetails ? '' : ' viewer-image-only')}>
           <div className="viewer-image">
-            {isPanorama ? <PanoramaPhoto key={selected.src} src={selected.src} alt={selected.title || 'Selected panorama'} panStart={selected.panStart}/> : <OriginalPhoto key={selected.src} src={selected.src} alt={selected.title || 'Selected photograph'} fullWidth={!hasPhotoDetails}/>}
+            {isPanorama ? <PanoramaPhoto key={selected.src} src={selected.src} alt={selected.title || 'Selected panorama'} photoId={selected.id} albumId={albumId} panStart={selected.panStart}/> : <OriginalPhoto key={selected.src} src={selected.src} alt={selected.title || 'Selected photograph'} fullWidth={!hasPhotoDetails}/>}
             <button className="prev" aria-label="Previous photo" disabled={!filtered.length || (filtered.length === 1 && filtered[0].id === selected.id)} onClick={() => navigate(-1)}><ArrowLeft size={20}/></button>
             <button className="next" aria-label="Next photo" disabled={!filtered.length || (filtered.length === 1 && filtered[0].id === selected.id)} onClick={() => navigate(1)}><ArrowRight size={20}/></button>
           </div>

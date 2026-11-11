@@ -12,7 +12,9 @@ The configured homepage photo first displays a small optimized preview. Next, th
 
 Set `"homePhotoId": ""` or omit it to use automatic orientation selection instead: wider screens show the first landscape photo in `content/photos.json`, and taller screens show the first portrait photo. Move entries earlier in the list to change these choices. If a matching orientation is unavailable, the first photo is used instead. The image is cropped as needed to fill the screen; gallery photos keep their full aspect ratios.
 
-Scroll down or choose **Explore the albums** to reach the Explore albums screen. It shows a full-screen 2×2 grid of clickable covers, with navigation above it. The complete gallery follows the grid.
+Scroll down or choose **Explore the albums** to reach the Explore albums screen. It shows a full-screen 2×2 grid of clickable covers, with navigation above it. The homepage ends after the album grid and footer. Choose **All photographs** to open the complete gallery as a separate view; **Back to albums** returns to the album grid. Direct gallery, album, photo, and tag links still work, including browser Back and Forward.
+
+The hero, album rows, and photo viewer use stable small-viewport heights (`svh`) so mobile address bars appearing or disappearing do not resize the photographs while scrolling. Album row height accounts for the measured navigation toolbar. Rotating the device or resizing the actual window still adjusts the layout.
 
 ## Define albums
 
@@ -178,6 +180,8 @@ Run `npm run build` and publish the updated site. Tracking runs only in producti
 Look for these paths in Umami's Pages and session views to identify which photographs were opened. These are analytics-only labels, not public routes: use the normal `?album=...&photo=...` URLs to share or open a photograph. The labels apply to new visits after deployment; existing session records keep their original URLs. The hook changes existing pageview payloads without sending additional pageviews. Gallery thumbnails scrolling into view are not counted as opened photos.
 
 Visit the published site and check your Umami dashboard to verify incoming visits. See Umami's [tracking setup](https://docs.umami.is/docs/collect-data) and [tracker configuration](https://docs.umami.is/docs/tracker-configuration).
+
+Panorama viewer interactions appear as **panorama_interaction** events in Umami. Open **Events → Properties** to filter by `photo_id`, `album_id` (empty for the full gallery), or `action`: `pause`, `resume`, `fit`, `explore`, or `pan`. Manual pans also include `method` (`drag`, `swipe`, `wheel`, or `keyboard`) and `start_percent` / `end_percent` along the available horizontal scroll range. Button actions include `position_percent`. Positions run from 0 at the left edge to 100 at the right edge. Continuous wheel/keyboard input and swipe momentum are grouped after 300 ms of inactivity; a held mouse drag stays one gesture until released. Automatic motion and input that does not move the image do not create pan events. Early interactions are buffered while the tracker loads, with their photo context preserved. These are custom events, so they do not add pageviews. Local development and loopback previews remain excluded.
 
 ## About Me page
 

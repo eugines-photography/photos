@@ -1,8 +1,49 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {installUmami, labelGalleryPageview, parseUmamiConfig} from '../app/analytics.ts';
+import {createAnalyticsEventQueue, installUmami, labelGalleryPageview, parseUmamiConfig} from '../app/analytics.ts';
 
 const config = {websiteId: '12345678-1234-1234-1234-123456789abc', scriptUrl: 'https://cloud.umami.is/script.js'};
+
+test('early interaction events retain their original photo context when Umami loads later', () => {
+  let tracker;
+  let currentUrl = '/photos/photo/one/';
+  const sent = [];
+  const events = createAnalyticsEventQueue(() => tracker, () => ({url: currentUrl, title: 'Original photo'}));
+  const data = {photo_id: 'one', album_id: 'panoramas', action: 'fit'};
+  events.record('panorama_interaction', data);
+  currentUrl = '/photos/photo/two/';
+  data.photo_id = 'two';
+  tracker = {track(callback) {sent.push(callback({website: config.websiteId, url: currentUrl}));}};
+  events.flush();
+  events.flush();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].name, 'panorama_interaction');
+  assert.equal(sent[0].url, '/photos/photo/one/');
+  assert.equal(sent[0].data.photo_id, 'one');
+  assert.equal(sent[0].website, config.websiteId);
+  assert.equal(typeof sent[0].timestamp, 'number');
+});
+
+test('event buffering is bounded and blocked or failing analytics cannot break interaction handlers', async () => {
+  let tracker;
+  const sent = [];
+  const events = createAnalyticsEventQueue(() => tracker, () => ({url: '/'}));
+  for (let n = 0; n < 70; n++) events.record('panorama_interaction', {n});
+  tracker = {track(callback) {sent.push(callback({}));}};
+  events.flush();
+  assert.equal(sent.length, 50);
+  assert.equal(sent[0].data.n, 20);
+  tracker = {track() {throw new Error('blocked');}};
+  assert.doesNotThrow(() => events.record('panorama_interaction', {}));
+  tracker = {track() {return Promise.reject(new Error('offline'));}};
+  events.record('panorama_interaction', {});
+  await new Promise(resolve => setImmediate(resolve));
+  tracker = undefined;
+  events.record('panorama_interaction', {});
+  events.clear();
+  tracker = {track() {assert.fail('cleared events must not be sent');}};
+  events.flush();
+});
 
 function fakeDocument() {
   const scripts = [];

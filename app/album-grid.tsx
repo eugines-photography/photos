@@ -23,14 +23,12 @@ export default function AlbumGrid({albums, photos, embedded = false, onOpen, onS
     if (!section) return;
     const toolbar = section.querySelector<HTMLElement>('.albums-toolbar');
     function measure() {
-      const available = window.innerHeight - (toolbar?.getBoundingClientRect().height ?? 0) - 2;
-      section!.style.setProperty('--album-row-height', `${Math.max(1, available / 2)}px`);
+      section!.style.setProperty('--album-toolbar-height', `${toolbar?.getBoundingClientRect().height ?? 64}px`);
     }
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     if (toolbar) observer?.observe(toolbar);
-    window.addEventListener('resize', measure);
-    return () => {observer?.disconnect(); window.removeEventListener('resize', measure);};
+    return () => {observer?.disconnect();};
   }, []);
 
   function viewAll() {
