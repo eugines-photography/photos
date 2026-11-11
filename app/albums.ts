@@ -9,6 +9,7 @@ export type Album = {
   coverColumns?: 1 | 2;
   autoPan?: boolean;
   coverPhotoId: string;
+  bannerPhotoId?: string;
   photoIds: string[];
   highlightedPhotoIds?: string[];
 };
@@ -31,10 +32,13 @@ export function parseAlbums(input: unknown, photos: Photo[]): Album[] {
     if (!Array.isArray(row.photoIds) || !row.photoIds.length || row.photoIds.some((id: unknown) => typeof id !== 'string' || !photoIds.has(id))) return fail('photoIds must list existing photo IDs and contain at least one photo.');
     if (new Set(row.photoIds).size !== row.photoIds.length) return fail('photoIds must not contain duplicates.');
     if (typeof row.coverPhotoId !== 'string' || !row.photoIds.includes(row.coverPhotoId)) return fail('coverPhotoId must be one of this album’s photoIds.');
+    if (row.bannerPhotoId !== undefined && typeof row.bannerPhotoId !== 'string') return fail('bannerPhotoId must be a photo ID or an empty string.');
+    const bannerPhotoId = row.bannerPhotoId?.trim() || row.coverPhotoId;
+    if (!row.photoIds.includes(bannerPhotoId)) return fail('bannerPhotoId must be one of this album’s photoIds.');
     const highlighted = row.highlightedPhotoIds === undefined ? [] : row.highlightedPhotoIds;
     if (!Array.isArray(highlighted) || highlighted.some((id: unknown) => typeof id !== 'string' || !row.photoIds.includes(id))) return fail('highlightedPhotoIds must be an array of photo IDs belonging to this album.');
     if (new Set(highlighted).size !== highlighted.length) return fail('highlightedPhotoIds must not contain duplicates.');
-    return {id: row.id, title: row.title.trim(), description: (row.description ?? '').trim() || undefined, zoomOut: row.zoomOut ?? false, startZoom: row.startZoom ?? 1, coverColumns: row.coverColumns ?? 1, autoPan: row.autoPan ?? true, coverPhotoId: row.coverPhotoId, photoIds: [...row.photoIds], highlightedPhotoIds: [...highlighted]};
+    return {id: row.id, title: row.title.trim(), description: (row.description ?? '').trim() || undefined, zoomOut: row.zoomOut ?? false, startZoom: row.startZoom ?? 1, coverColumns: row.coverColumns ?? 1, autoPan: row.autoPan ?? true, coverPhotoId: row.coverPhotoId, bannerPhotoId, photoIds: [...row.photoIds], highlightedPhotoIds: [...highlighted]};
   });
 }
 

@@ -32,12 +32,15 @@ Edit `content/albums.json` to define your albums. The Landscapes, Urban, Birds, 
   "coverColumns": 1,
   "autoPan": true,
   "coverPhotoId": "dsc-0471",
+  "bannerPhotoId": "dsc-0520",
   "highlightedPhotoIds": [],
   "photoIds": ["dsc-0471", "dsc-0520"]
 }
 ```
 
 Use photo `id` values from `content/photos.json`. The cover must also appear in the album's `photoIds`. A photo can belong to several albums. The description is optional. Album IDs must be unique lowercase words separated by hyphens. Move entries up or down in the array to reorder the covers; use `[]` to show only the full collection tile.
+
+`coverPhotoId` selects the photo in the Explore albums grid and previous/next album cards. Set `bannerPhotoId` to a different photo ID for the banner behind the title, description, and navigation after opening that album. The banner photo must also belong to the album's `photoIds`. Leave `bannerPhotoId` empty (`""`) or omit it to reuse `coverPhotoId`.
 
 Set `"coverColumns": 2` to make an album cover span both columns in the homepage's Explore albums grid, including on mobile. It keeps the same row height and supports the existing zoom-out and panorama animations. Later albums continue below in their configured order. The standalone Explore albums page uses the same setting. Set `"coverColumns": 1` or omit it for the default width.
 
@@ -53,11 +56,13 @@ Album membership is defined by the photo list, so changing a photo's tags does n
 
 An opened album shows its own gallery view, with the welcome screen and album grid removed. Scrolling up reaches the album header; use **Back to albums** to return to the homepage's album grid.
 
-Albums initially show up to 12 photographs, ordered to introduce different tags and avoid repeating the previous photo's subject where possible. Tags shared by every matching photo are ignored for variety, so a shared tag such as `landscape` does not dominate the order. Ties prefer newer photos. **Show more photos** reveals the next 12 in the same order without moving the scroll position, with the album navigation available below each batch. Opening another album or changing filters starts a fresh batch. The full gallery still displays all matching photos.
+Albums and the full gallery initially show up to 12 photographs. Albums are ordered to introduce different tags and avoid repeating the previous photo's subject where possible. Tags shared by every matching photo are ignored for variety, so a shared tag such as `landscape` does not dominate the order. Ties prefer newer photos. The full gallery cycles through tags. **Show more photos** reveals the next 12 in the same order without moving the scroll position, with navigation available below each batch. Opening another album or changing filters starts a fresh batch.
+
+Closing the photo viewer returns to the last photograph viewed in either gallery. Navigating to a photograph beyond the visible batch automatically reveals enough photographs to include its thumbnail. The full gallery also includes **Back to albums** at the bottom.
 
 Navigation below the album's photographs shows cover-photo cards for the previous and next albums in `content/albums.json` order. Navigation wraps around: the first album's previous link goes to the last album, and the last album's next link goes to the first. With only one album, these cards are hidden. They use lazy-loaded optimized previews, with the album title and photograph count overlaid. **Back to all albums** returns to this album's cover in the homepage grid, while **All photographs** opens the complete gallery. Moving to another album clears tag filters and opens its cover at the top.
 
-The album opening uses its configured cover photo with a cinematic gradient, an oversized serif title, and the optional album description. Back to albums sits at the top-left, with the photo count at the top-right. Tag controls sit directly over the cover without an enclosing panel. The opening targets one-third of the screen height, with room to expand for text and additional tags. Its cover has a gentle entrance animation, disabled for reduced-motion preferences. Opening an album lands at this cover; its photographs follow below. The cover uses an optimized preview and never downloads the original automatically.
+The album opening uses its configured banner photo (falling back to the cover) with a cinematic gradient, an oversized serif title, and the optional album description. Back to albums sits at the top-left, with the photo count at the top-right. Tag controls sit directly over the cover without an enclosing panel. The opening targets one-third of the screen height, with room to expand for text and additional tags. Its cover has a gentle entrance animation, disabled for reduced-motion preferences. Opening an album lands at this cover; its photographs follow below. The cover uses an optimized preview and never downloads the original automatically.
 
 `albums.html` also provides the same full-screen grid as the homepage through a direct link. Cards open the selected album's photo grid. This page uses the same `content/albums.json` definitions and supports direct links on GitHub Pages.
 

@@ -52,6 +52,19 @@ test('album membership combines with tag filters and inspiration visibility with
   assert.deepEqual(photos, original);
 });
 
+test('album banners can differ from grid covers and empty settings fall back to the cover', () => {
+  for (const bannerPhotoId of [undefined, '', '  ']) {
+    assert.equal(parseAlbums([{...entry, bannerPhotoId}], photos)[0].bannerPhotoId, 'coast');
+  }
+  const [album] = parseAlbums([{...entry, bannerPhotoId: 'forest'}], photos);
+  assert.equal(album.bannerPhotoId, 'forest');
+  assert.equal(album.coverPhotoId, 'coast');
+  assert.deepEqual(album.photoIds, entry.photoIds);
+  for (const bannerPhotoId of [null, 1, true, 'missing', 'city']) {
+    assert.throws(() => parseAlbums([{...entry, bannerPhotoId}], photos), /bannerPhotoId/);
+  }
+});
+
 test('invalid album IDs, titles, membership, and covers fail with useful errors', () => {
   assert.throws(() => parseAlbums({}, photos), /array/);
   assert.throws(() => parseAlbums([null], photos), /Album 1/);

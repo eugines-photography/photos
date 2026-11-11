@@ -15,6 +15,7 @@
     "zoomOut": false,
     "description": "The wonders of the natural world.",
     "coverPhotoId": "dsc-0574",
+    "bannerPhotoId": "",
     "photoIds": [
       "dsc-7833",
       "dsc-7029",
@@ -73,7 +74,8 @@
     "startZoom": 2,
     "zoomOut": false,
     "description": "Intracies of the built environment.",
-    "coverPhotoId": "dsc-0058-edited",
+    "coverPhotoId": "dsc-5779",
+    "bannerPhotoId": "dsc-0058-edited",
     "photoIds": [
       "dsc-0058-edited",
       "home03",
@@ -113,6 +115,7 @@
     "zoomOut": false,
     "description": "Flying closer to the birds that fly away.",
     "coverPhotoId": "dsc-2119",
+    "bannerPhotoId": "",
     "photoIds": [
       "dsc-2119",
       "dsc-8728-Enhanced-NR",
@@ -155,6 +158,7 @@
     "startZoom": 1,
     "zoomOut": false,
     "coverPhotoId": "dsc-4493",
+    "bannerPhotoId": "dsc-7965",
     "photoIds": [
       "dsc-4493",
       "dsc-7997",
@@ -169,37 +173,6 @@
     ]
   },
   {
-    "id": "panoramas",
-    "autoPan": true,
-    "coverColumns": 2,
-    "highlightedPhotoIds": [],
-    "title": "Panoramas",
-    "description": "Immersive views of the world",
-    "startZoom": 1,
-    "zoomOut": false,
-    "coverPhotoId": "dsc-9615-9621",
-    "photoIds": [
-      "dsc-9615-9621",
-      "dsc-9039-9058",
-      "dsc-6514-panorama",
-      "dscf1086",
-      "dsc-1853-1860",
-      "dsc-0061-pano",
-      "dsc-9544-pano",
-      "dsc-7436-7455",
-      "dsc-7074-panorama",
-      "dsc-3438-pano",
-      "dsc-2045-2059",
-      "dsc-7011-pano",
-      "dsc-3415-3427",
-      "dsc-4677-4683",
-      "dsc-6003-6023-hdr-pano",
-      "dsc-8519-8533",
-      "dsc-3527-3536",
-      "dsc-0163_0175"
-    ]
-  },
-  {
     "id": "portraits",
     "coverColumns": 1,
     "highlightedPhotoIds": [],
@@ -208,6 +181,7 @@
     "startZoom": 1,
     "zoomOut": false,
     "coverPhotoId": "dsc-8767",
+    "bannerPhotoId": "dsc-6412",
     "photoIds": [
       "dsc-8767",
       "dsc-6412",
@@ -242,7 +216,8 @@
     "description": "Cultural monuments and traditions",
     "startZoom": 1,
     "zoomOut": false,
-    "coverPhotoId": "dsc-4381",
+    "coverPhotoId": "dsc-0537",
+    "bannerPhotoId": "dsc-4381",
     "photoIds": [
       "dsc-4381",
       "dsc-4393",
@@ -268,6 +243,38 @@
       "dsc-5604",
       "dsc-5710",
       "dsc-6376"
+    ]
+  },
+  {
+    "id": "panoramas",
+    "autoPan": true,
+    "coverColumns": 2,
+    "highlightedPhotoIds": [],
+    "title": "Panoramas",
+    "description": "Immersive views of the world",
+    "startZoom": 1,
+    "zoomOut": false,
+    "coverPhotoId": "dsc-6003-6023-hdr-pano",
+    "bannerPhotoId": "",
+    "photoIds": [
+      "dsc-9615-9621",
+      "dsc-9039-9058",
+      "dsc-6514-panorama",
+      "dscf1086",
+      "dsc-1853-1860",
+      "dsc-0061-pano",
+      "dsc-9544-pano",
+      "dsc-7436-7455",
+      "dsc-7074-panorama",
+      "dsc-3438-pano",
+      "dsc-2045-2059",
+      "dsc-7011-pano",
+      "dsc-3415-3427",
+      "dsc-4677-4683",
+      "dsc-6003-6023-hdr-pano",
+      "dsc-8519-8533",
+      "dsc-3527-3536",
+      "dsc-0163_0175"
     ]
   }
 ]

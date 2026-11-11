@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {galleryScrollTarget, restoreGalleryScroll} from '../app/gallery-scroll.ts';
+import {galleryScrollTarget, restoreGalleryScroll, restorePhotoPosition} from '../app/gallery-scroll.ts';
 
 function fixture(initial) {
   const events = new EventTarget();
@@ -89,4 +89,50 @@ test('rapid navigation and cleanup cancel obsolete fragment jumps', () => {
   app.navigate('#albums');
   app.flush();
   assert.equal(app.scrolls.length, 1);
+});
+
+test('photo back/forward navigation and closing do not jump to the same album header', () => {
+  const app = fixture('?album=urban#gallery');
+  app.mount();
+  const dispose = restoreGalleryScroll(app.browser, app.document);
+  app.flush();
+  for (const url of ['?album=urban&photo=one#gallery', '?album=urban&photo=two#gallery', '?album=urban#gallery']) {
+    app.navigate(url, 'popstate');
+    app.flush();
+  }
+  assert.deepEqual(app.scrolls.map(scroll => scroll.id), ['gallery']);
+  app.navigate('?album=portraits#gallery', 'popstate');
+  app.flush();
+  assert.equal(app.scrolls.length, 2);
+  dispose();
+});
+
+test('closing returns focus and scroll to the last viewed photo after layout', () => {
+  const app = fixture('?album=urban#gallery');
+  const calls = [];
+  app.document.getElementById = id => id === 'gallery-photo-last/viewed' ? {
+    querySelector() {return {focus(options) {calls.push(['focus', options]);}};},
+    scrollIntoView(options) {calls.push(['scroll', options]);},
+  } : null;
+  app.browser.scrollTo = () => assert.fail('existing photo should be used');
+  restorePhotoPosition(app.browser, app.document, 'last/viewed', {left: 0, top: 2000});
+  assert.deepEqual(calls, []);
+  app.flush();
+  assert.deepEqual(calls, [
+    ['focus', {preventScroll: true}],
+    ['scroll', {behavior: 'instant', block: 'nearest', inline: 'nearest'}],
+  ]);
+});
+
+test('missing photos restore the saved position and obsolete close restorations are canceled', () => {
+  const app = fixture('#gallery');
+  const calls = [];
+  app.browser.scrollTo = options => calls.push(options);
+  restorePhotoPosition(app.browser, app.document, 'missing', {left: 10, top: 2500});
+  app.flush();
+  assert.deepEqual(calls, [{left: 10, top: 2500, behavior: 'instant'}]);
+  const cancel = restorePhotoPosition(app.browser, app.document, 'another', {left: 0, top: 0});
+  cancel();
+  app.flush();
+  assert.equal(calls.length, 1);
 });

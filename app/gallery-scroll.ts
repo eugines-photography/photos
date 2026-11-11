@@ -18,13 +18,19 @@ type ScrollDocument = {getElementById: (id: string) => Pick<HTMLElement, 'scroll
 
 export function restoreGalleryScroll(browser: ScrollBrowser, document: ScrollDocument) {
   let frame: number | null = null;
+  let lastDestination: string | undefined;
   function cancel() {
     if (frame !== null) browser.cancelAnimationFrame(frame);
     frame = null;
   }
   function restore() {
+    const url = new URL(browser.location.href);
+    const destination = `${galleryScrollTarget(url) ?? ''}:${url.searchParams.get('album') ?? ''}`;
+    // Photo/history changes within the same album must not jump to its header.
+    if (destination === lastDestination) return;
+    lastDestination = destination;
     cancel();
-    if (!galleryScrollTarget(new URL(browser.location.href))) return;
+    if (!galleryScrollTarget(url)) return;
     // Development pages mount on the client, after the native fragment jump.
     frame = browser.requestAnimationFrame(() => {
       frame = null;
@@ -43,4 +49,22 @@ export function restoreGalleryScroll(browser: ScrollBrowser, document: ScrollDoc
     browser.removeEventListener('hashchange', restore);
     browser.removeEventListener('popstate', restore);
   };
+}
+
+export function restorePhotoPosition(
+  browser: Pick<Window, 'requestAnimationFrame' | 'cancelAnimationFrame' | 'scrollTo'>,
+  document: Pick<Document, 'getElementById'>,
+  photoId: string,
+  fallback: {left: number; top: number},
+) {
+  const frame = browser.requestAnimationFrame(() => {
+    const card = document.getElementById('gallery-photo-' + photoId);
+    if (card) {
+      card.querySelector('button')?.focus({preventScroll: true});
+      card.scrollIntoView({behavior: 'instant', block: 'nearest', inline: 'nearest'});
+    } else {
+      browser.scrollTo({...fallback, behavior: 'instant'});
+    }
+  });
+  return () => browser.cancelAnimationFrame(frame);
 }

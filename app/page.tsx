@@ -18,7 +18,7 @@ import AlbumGrid from './album-grid';
 import AlbumTagFilters from './album-tag-filters';
 import AlbumNavigation from './album-navigation';
 import PhotoCollection from './photo-collection';
-import {restoreGalleryScroll} from './gallery-scroll';
+import {restoreGalleryScroll, restorePhotoPosition} from './gallery-scroll';
 import {createViewTransitionRunner} from './view-transitions';
 import type {GallerySection, GalleryUrlChange} from './gallery-url';
 
@@ -36,12 +36,14 @@ export default function Gallery() {
   const hasPhotoDetails = Boolean(selected?.title || selected?.description);
   const isPanorama = Boolean(selected && (albumId === 'panoramas' || selected.tags.includes('panoramas')));
   const dialog = useRef<HTMLDialogElement>(null);
+  const viewedPhoto = useRef<{photoId: string; collectionKey: string; left: number; top: number} | null>(null);
+  const previousOverflow = useRef<string | null>(null);
   const transitions = useRef<ReturnType<typeof createViewTransitionRunner> | null>(null);
   const activeAlbum = albums.find(album => album.id === albumId) ?? null;
   const albumIndex = albums.findIndex(album => album.id === albumId);
   const previousAlbum = activeAlbum && albums.length > 1 ? albums[(albumIndex - 1 + albums.length) % albums.length] : undefined;
   const nextAlbum = activeAlbum && albums.length > 1 ? albums[(albumIndex + 1) % albums.length] : undefined;
-  const albumCover = activeAlbum ? photos.find(photo => photo.id === activeAlbum.coverPhotoId) : null;
+  const albumCover = activeAlbum ? photos.find(photo => photo.id === (activeAlbum.bannerPhotoId ?? activeAlbum.coverPhotoId)) : null;
   const collection = photosForAlbum(photos, activeAlbum);
   const all = collection;
   const tagCounts = countTags(all);
@@ -75,7 +77,7 @@ export default function Gallery() {
   function backToAlbums() {
     changeCollection({albumId: null, tags: [], query: '', photoId: null, showSamples: true}, activeAlbum ? `album-${activeAlbum.id}` : 'albums');
   }
-  function close() {updateLocation({photoId: null});}
+  function close() {updateLocation({photoId: null}, 'push', 'gallery');}
   function chooseTag(tag: string) {
     updateLocation(current => ({tags: current.tags.includes(tag) ? current.tags.filter(value => value !== tag) : [...current.tags, tag], photoId: null}), 'push', 'gallery');
   }
@@ -90,14 +92,35 @@ export default function Gallery() {
 
   useEffect(() => {
     if (selected) {
-      dialog.current?.showModal();
-      document.body.style.overflow = 'hidden';
+      const previous = viewedPhoto.current;
+      viewedPhoto.current = {photoId: selected.id, collectionKey,
+        left: previous?.collectionKey === collectionKey ? previous.left : window.scrollX,
+        top: previous?.collectionKey === collectionKey ? previous.top : window.scrollY};
+      if (previousOverflow.current === null) {
+        previousOverflow.current = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+      }
+      if (!dialog.current?.open) dialog.current?.showModal();
     } else {
+      const previous = viewedPhoto.current;
+      viewedPhoto.current = null;
+      if (previousOverflow.current !== null) {
+        document.body.style.overflow = previousOverflow.current;
+        previousOverflow.current = null;
+      }
       dialog.current?.close();
-      document.body.style.overflow = '';
+      if (previous && previous.collectionKey === collectionKey && showGallery) {
+        return restorePhotoPosition(window, document, previous.photoId, previous);
+      }
     }
-    return () => {document.body.style.overflow = '';};
-  }, [selected]);
+  }, [selected, collectionKey, showGallery]);
+
+  useEffect(() => () => {
+    if (previousOverflow.current !== null) {
+      document.body.style.overflow = previousOverflow.current;
+      previousOverflow.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!selected) return;
@@ -161,7 +184,7 @@ export default function Gallery() {
       {!activeAlbum && <a className="back-to-albums full-gallery-back" href={`${import.meta.env.BASE_URL}#albums`} onClick={event => {if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); backToAlbums();}}><ArrowLeft size={16} aria-hidden="true"/> Back to albums</a>}
       <section className={'library' + (activeAlbum ? ' album-photo-library' : '')} aria-label="Photo library">
         {!activeAlbum && galleryControls}
-        {filtered.length ? <PhotoCollection key={collectionKey} photos={filtered} paginated={Boolean(activeAlbum)} renderPhoto={(photo, index) => <article className="photo-card" key={photo.id}>
+        {filtered.length ? <PhotoCollection key={collectionKey} photos={filtered} revealPhotoId={selected?.id} renderPhoto={(photo, index) => <article className="photo-card" id={'gallery-photo-' + photo.id} key={photo.id}>
             <button onClick={() => openPhoto(photo)} aria-label={photo.title ? 'View ' + photo.title : 'View photo ' + (index + 1)}>
               <OptimizedImage src={photo.src} alt={photo.title || 'Photograph ' + (index + 1)} sizes={gallerySizes} thumbnail/>
               <div className="photo-overlay"><div>{photo.title && <h3>{photo.title}</h3>}</div><span className="expand-photo"><ArrowUpRight size={19}/></span></div>
@@ -171,6 +194,7 @@ export default function Gallery() {
           </article>}/> : <div className="empty-state"><ImagePlus size={35}/><h3>{query || activeTags.length ? 'No moments found.' : 'The next chapter is on its way.'}</h3><p>{query || activeTags.length ? 'Try different tags or clear the filters.' : 'New photographs will appear here soon.'}</p>{(query || activeTags.length > 0) && <button className="button primary" onClick={() => updateLocation({query: '', tags: [], photoId: null})}>Clear filters</button>}</div>}
       </section>
       {activeAlbum && <AlbumNavigation album={activeAlbum} previous={previousAlbum} next={nextAlbum} photos={photos} onOpen={openAlbum} onBack={backToAlbums} onShowAll={showAllPhotos}/>}
+      {!activeAlbum && <a className="back-to-albums full-gallery-back" href={`${import.meta.env.BASE_URL}#albums`} onClick={event => {if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); backToAlbums();}}><ArrowLeft size={16} aria-hidden="true"/> Back to albums</a>}
     </main>
     </div>}
     <SiteFooter/>
