@@ -1,51 +1,196 @@
-'use client';
-
 import {useEffect, useRef, useState} from 'react';
-import {Aperture, ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Grid2X2, ImagePlus, LayoutGrid, Plus, Search, SlidersHorizontal, Tag, Upload, X} from 'lucide-react';
-import {Photo, samples} from './samples';
+import {flushSync} from 'react-dom';
+import {ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, ChevronDown, ImagePlus, X} from 'lucide-react';
+import manifest from '../content/photos.json';
+import albumManifest from '../content/albums.json';
+import imageAssets from '../content/generated/images.json';
+import site from '../content/site.json';
+import {countTags, parsePhotos, selectPhotos, type Photo} from './gallery';
+import {SiteFooter} from './site-chrome';
+import OptimizedImage from './optimized-image';
+import OriginalPhoto from './original-photo';
+import PanoramaPhoto from './panorama-photo';
+import PanoramaCover from './panorama-cover';
+import {featuredPhotos, gallerySizes, homepagePhoto} from './image-sources';
+import {useGalleryUrl} from './use-gallery-url';
+import {parseAlbums, photosForAlbum, prioritizeAlbumHighlights} from './albums';
+import AlbumGrid from './album-grid';
+import AlbumTagFilters from './album-tag-filters';
+import AlbumNavigation from './album-navigation';
+import PhotoCollection from './photo-collection';
+import {restoreGalleryScroll} from './gallery-scroll';
+import {createViewTransitionRunner} from './view-transitions';
+import type {GallerySection, GalleryUrlChange} from './gallery-url';
 
-export default function Home() {
-  const [photos,setPhotos]=useState<Photo[]>([]);
-  const [active,setActive]=useState('all'); const [query,setQuery]=useState('');
-  const [view,setView]=useState<'gallery'|'tags'>('gallery'); const [compact,setCompact]=useState(false);
-  const [sort,setSort]=useState('newest'); const [showSamples,setShowSamples]=useState(true);
-  const [uploadOpen,setUploadOpen]=useState(false); const [files,setFiles]=useState<File[]>([]);
-  const [uploadTags,setUploadTags]=useState(''); const [busy,setBusy]=useState(false); const [progress,setProgress]=useState('');
-  const [error,setError]=useState(''); const [notice,setNotice]=useState(''); const [loadError,setLoadError]=useState(false);
-  const [selected,setSelected]=useState<Photo|null>(null); const [editTitle,setEditTitle]=useState(''); const [editTags,setEditTags]=useState('');
-  const [dragging,setDragging]=useState(false); const input=useRef<HTMLInputElement>(null); const dialog=useRef<HTMLDialogElement>(null);
-  const all=[...photos,...(showSamples?samples:[])];
-  const tags=[...new Set(all.flatMap(p=>p.tags))].sort();
-  const filtered=all.filter(p=>(active==='all'||p.tags.includes(active))&&(!query||[p.title,...p.tags].some(t=>t.toLowerCase().includes(query.toLowerCase())))).sort((a,b)=>sort==='oldest'?a.createdAt-b.createdAt:sort==='title'?a.title.localeCompare(b.title):b.createdAt-a.createdAt);
-  async function load() {try {const r=await fetch('/api/photos');if(!r.ok)throw Error();setPhotos(await r.json());setLoadError(false);}catch{setLoadError(true);}}
-  useEffect(()=>{load();},[]);
-  useEffect(()=>{if(notice){const t=setTimeout(()=>setNotice(''),4500);return()=>clearTimeout(t);}},[notice]);
-  useEffect(()=>{if(uploadOpen||selected){dialog.current?.showModal();document.body.style.overflow='hidden';}else{dialog.current?.close();document.body.style.overflow='';}return()=>{document.body.style.overflow='';};},[uploadOpen,selected]);
-  function close(){if(busy)return;setUploadOpen(false);setSelected(null);setError('');setFiles([]);setUploadTags('');}
-  function openPhoto(p:Photo){setSelected(p);setEditTitle(p.title);setEditTags(p.tags.join(', '));setError('');}
-  function addFiles(list:FileList|File[]|null){if(!list)return;const valid=Array.from(list).filter(f=>['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(f.type)&&f.size>0&&f.size<=20*1024*1024);setFiles(prev=>[...prev,...valid]);if(valid.length!==list.length)setError('Some files were skipped. Choose supported images under 20 MB.');else setError('');}
-  async function upload(){setBusy(true);setError('');let count=0;let remaining=[...files];try{for(const file of files){setProgress('Uploading '+(count+1)+' of '+files.length+'…');const form=new FormData();form.set('file',file);form.set('tags',uploadTags);const r=await fetch('/api/photos',{method:'POST',body:form});const data=await r.json() as Photo & {error?:string};if(!r.ok)throw Error(data.error);setPhotos(prev=>[data,...prev]);count++;remaining=remaining.slice(1);setFiles(remaining);}setUploadOpen(false);setUploadTags('');setActive('all');setQuery('');setView('gallery');setNotice(count+' photo'+(count===1?'':'s')+' added to your library.');}catch(e){setError((e as Error).message);}finally{setBusy(false);setProgress('');}}
-  async function save(){if(!selected)return;setBusy(true);setError('');try{const updates={title:editTitle.trim(),tags:[...new Set(editTags.split(',').map(t=>t.trim().toLowerCase()).filter(Boolean))]};const r=await fetch('/api/photos/'+selected.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(updates)});const data=await r.json() as {error?:string};if(!r.ok)throw Error(data.error);setPhotos(prev=>prev.map(p=>p.id===selected.id?{...p,...updates}:p));setSelected(null);setNotice('Photo details saved.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  function chooseTag(tag:string){setActive(tag);setView('gallery');}
-  function navigate(direction:number){if(!selected)return;const i=filtered.findIndex(p=>p.id===selected.id);openPhoto(filtered[(i+direction+filtered.length)%filtered.length]);}
+const photos = parsePhotos(manifest);
+const albums = parseAlbums(albumManifest, photos);
+const featured = featuredPhotos(photos, imageAssets);
+const homePhoto = homepagePhoto(photos, site.homePhotoId);
+const showPhotoIds = 'showPhotoIds' in site && site.showPhotoIds === true;
+
+export default function Gallery() {
+  const [locationState, updateLocation] = useGalleryUrl(photos, albums);
+  const {tags: urlTags, query, showSamples, photoId, albumId} = locationState;
+  const [showMoreTags, setShowMoreTags] = useState(false);
+  const selected = photos.find(photo => photo.id === photoId) ?? null;
+  const hasPhotoDetails = Boolean(selected?.title || selected?.description);
+  const isPanorama = Boolean(selected && (albumId === 'panoramas' || selected.tags.includes('panoramas')));
+  const dialog = useRef<HTMLDialogElement>(null);
+  const transitions = useRef<ReturnType<typeof createViewTransitionRunner> | null>(null);
+  const activeAlbum = albums.find(album => album.id === albumId) ?? null;
+  const albumIndex = albums.findIndex(album => album.id === albumId);
+  const previousAlbum = activeAlbum && albums.length > 1 ? albums[(albumIndex - 1 + albums.length) % albums.length] : undefined;
+  const nextAlbum = activeAlbum && albums.length > 1 ? albums[(albumIndex + 1) % albums.length] : undefined;
+  const albumCover = activeAlbum ? photos.find(photo => photo.id === activeAlbum.coverPhotoId) : null;
+  const collection = photosForAlbum(photos, activeAlbum);
+  const all = collection;
+  const tagCounts = countTags(all);
+  const tags = [...tagCounts.keys()];
+  const activeTags = activeAlbum ? urlTags.filter(tag => tags.includes(tag)) : urlTags;
+  const collapsedTags = tags.filter((tag, index) => index < 3 || activeTags.includes(tag));
+  const visibleTags = showMoreTags ? tags : collapsedTags;
+  const hasMoreTags = tags.length > collapsedTags.length;
+  const filtered = prioritizeAlbumHighlights(selectPhotos(collection, {tags: activeTags, query, sort: activeAlbum ? 'tag-variety' : 'tag-cycle', showSamples}), activeAlbum);
+  const collectionKey = JSON.stringify([albumId, [...activeTags].sort(), query, showSamples]);
+
+  function openPhoto(photo: Photo) {updateLocation({photoId: photo.id}, 'push', 'gallery');}
+  function changeCollection(change: GalleryUrlChange, section: GallerySection) {
+    transitions.current ??= createViewTransitionRunner(document, window);
+    const target = () => document.getElementById(section) ?? document.getElementById('albums');
+    transitions.current.run(() => {
+      flushSync(() => updateLocation(change, 'push', section));
+      // Capture the destination at its final scroll position before crossfading.
+      target()?.scrollIntoView({behavior: 'instant', block: 'start'});
+    }, () => {
+      target()?.animate?.([{opacity: 0}, {opacity: 1}], {duration: 550, easing: 'ease-out'});
+    });
+  }
+  function openAlbum(id: string) {
+    changeCollection({albumId: id, tags: [], query: '', photoId: null, showSamples: true}, 'gallery');
+  }
+  function showAllPhotos() {
+    changeCollection({albumId: null, tags: [], query: '', photoId: null, showSamples: true}, 'gallery');
+  }
+  function backToAlbums() {
+    changeCollection({albumId: null, tags: [], query: '', photoId: null, showSamples: true}, activeAlbum ? `album-${activeAlbum.id}` : 'albums');
+  }
+  function close() {updateLocation({photoId: null});}
+  function chooseTag(tag: string) {
+    updateLocation(current => ({tags: current.tags.includes(tag) ? current.tags.filter(value => value !== tag) : [...current.tags, tag], photoId: null}), 'push', 'gallery');
+  }
+  function navigate(direction: number) {
+    if (!selected || !filtered.length) return;
+    const index = filtered.findIndex(photo => photo.id === selected.id);
+    openPhoto(index < 0 ? filtered[direction > 0 ? 0 : filtered.length - 1] : filtered[(index + direction + filtered.length) % filtered.length]);
+  }
+
+  useEffect(() => restoreGalleryScroll(window, document), [albumId]);
+  useEffect(() => () => {transitions.current?.dispose(); transitions.current = null;}, []);
+
+  useEffect(() => {
+    if (selected) {
+      dialog.current?.showModal();
+      document.body.style.overflow = 'hidden';
+    } else {
+      dialog.current?.close();
+      document.body.style.overflow = '';
+    }
+    return () => {document.body.style.overflow = '';};
+  }, [selected]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft') {event.preventDefault(); navigate(-1);}
+      if (event.key === 'ArrowRight') {event.preventDefault(); navigate(1);}
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, filtered]);
+
+  function tagButton(tag: string, showCount: boolean) {
+    const count = tagCounts.get(tag) ?? 0;
+    const label = showCount ? `${tag}, ${count} ${count === 1 ? 'photo' : 'photos'}` : tag;
+    return <button className={activeTags.includes(tag) ? 'tag-pill active' : 'tag-pill'} aria-pressed={activeTags.includes(tag)} aria-label={label} key={tag} onClick={() => chooseTag(tag)} title={label}><span className="hash" aria-hidden="true">#</span><span className="tag-name">{tag}</span>{showCount && <span className="tag-count" aria-hidden="true">{count}</span>}</button>;
+  }
+
+  const galleryControls = <>
+    <div className="gallery-tools">
+      {activeAlbum ? <AlbumTagFilters key={activeAlbum.id} tags={tags} activeTags={activeTags} renderTag={tag => tagButton(tag, true)}/> : <div className="tag-filter-controls">
+        <div id="tag-options" className={'tag-filters' + (showMoreTags || visibleTags.length > 3 ? ' expanded-selection' : '')} role="group" aria-label="Filter by tags">
+          {!activeAlbum && <button className={'tag-pill all-photos' + (!activeTags.length ? ' active' : '')} aria-pressed={!activeTags.length} onClick={showAllPhotos}>All photos <span>{photos.length}</span></button>}
+          {visibleTags.map(tag => tagButton(tag, true))}
+        </div>
+        {hasMoreTags && <button type="button" className="more-tags" aria-expanded={showMoreTags} aria-controls="tag-options" onClick={() => setShowMoreTags(value => !value)}>{showMoreTags ? 'Show fewer tags' : 'Show more tags'}<ChevronDown size={14} aria-hidden="true"/></button>}
+      </div>}
+    </div>
+    <div className="gallery-subline">{activeTags.length > 1 && <span>Matching any of {activeTags.length} selected tags</span>}<span className="sr-only" aria-live="polite">{filtered.length} {filtered.length === 1 ? 'photo' : 'photos'}</span></div>
+  </>;
+
   return <>
-    <header className="site-header"><a className="brand" href="/" aria-label="Stillframe home"><span className="brand-icon"><Aperture size={23}/></span>stillframe<span className="brand-dot">.</span></a><nav aria-label="Main navigation"><button className={view==='gallery'?'nav-link current':'nav-link'} onClick={()=>setView('gallery')}>Gallery</button><button className={view==='tags'?'nav-link current':'nav-link'} onClick={()=>setView('tags')}>Explore tags</button></nav><button className="button primary header-upload" aria-label="Upload photos" onClick={()=>setUploadOpen(true)}><Plus size={17}/><span>Upload photos</span></button></header>
+    {!activeAlbum && (homePhoto || featured.portrait && featured.landscape) && <section className="home-hero" aria-labelledby="welcome-title">
+        <div className="hero-photo">
+          {homePhoto ? <PanoramaCover src={homePhoto.src} alt={homePhoto.title || 'Featured panorama'} panStart={homePhoto.panStart} fullScreen priority/>
+            : <OptimizedImage src={featured.portrait!.src} landscapeSrc={featured.landscape!.src} alt="Featured photograph" sizes="100vw" priority/>}
+        </div>
+        <div className="hero-welcome">
+          <h1 id="welcome-title" className="hero-title"><span>Welcome to</span>{site.name}.</h1>
+        </div>
+        <a className="hero-scroll" href="#albums">{albums.length ? 'Explore the albums' : 'Explore the gallery'} <ArrowDown size={16} aria-hidden="true"/></a>
+    </section>}
+    {!activeAlbum ? <div id="albums" className="albums-screen" tabIndex={-1}>
+      <AlbumGrid albums={albums} photos={photos} embedded onOpen={openAlbum} onShowAll={showAllPhotos}/>
+    </div> : null}
+    <div id="gallery" className="gallery-scene" key={activeAlbum?.id ?? 'all-photos'} tabIndex={-1}>
+      {activeAlbum && albumCover && <section className="album-hero" aria-labelledby="album-heading">
+        <OptimizedImage src={albumCover.src} alt={albumCover.title || activeAlbum.title + ' album cover'} sizes="100vw" priority/>
+        <div className="album-hero-topline">
+          <a className="back-to-albums" href={`${import.meta.env.BASE_URL}#album-${activeAlbum.id}`} onClick={event => {if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); backToAlbums();}}><ArrowLeft size={16} aria-hidden="true"/> Back to albums</a>
+          <span className="album-hero-meta">{all.length} {all.length === 1 ? 'photograph' : 'photographs'}</span>
+        </div>
+        <div className="album-hero-content">
+          <div className="album-gallery-heading">
+          <h1 id="album-heading">{activeAlbum.title}</h1>
+          {activeAlbum.description && <p>{activeAlbum.description}</p>}
+          </div>
+          <div className="album-hero-filters">{galleryControls}</div>
+        </div>
+      </section>}
     <main>
-      <section className="intro"><div><div className="eyebrow"><span/> A PERSONAL PHOTO JOURNAL</div><h1>A collection of <em>little moments.</em></h1><p>Places I’ve been. Things I’ve noticed. A world worth looking at.</p></div><div className="intro-note"><span className="handwritten">Seen, felt, remembered.</span><svg width="75" height="32" viewBox="0 0 75 32" fill="none" aria-hidden="true"><path d="M2 5c20 22 45 22 67 5m-13 0 15-2-5 13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg></div></section>
-      <section className="library" aria-label="Photo library"><div className="library-top"><div className="section-label"><span className="tiny-number">01 /</span><h2>{view==='tags'?'Explore tags':'The gallery'}</h2><span className="count">{all.length} photographs</span></div><div className="view-buttons"><button className={!compact?'selected':''} onClick={()=>setCompact(false)} aria-label="Comfortable gallery" aria-pressed={!compact}><LayoutGrid size={17}/></button><button className={compact?'selected':''} onClick={()=>setCompact(true)} aria-label="Compact gallery" aria-pressed={compact}><Grid2X2 size={17}/></button></div></div>
-      <div className="gallery-tools"><div className="tag-filters" aria-label="Filter by tag"><button className={active==='all'?'tag-pill active':'tag-pill'} onClick={()=>chooseTag('all')}>All photos <span>{all.length}</span></button>{tags.map(t=><button className={active===t?'tag-pill active':'tag-pill'} key={t} onClick={()=>chooseTag(t)}><span className="hash">#</span>{t}</button>)}</div><div className="search-sort"><div className="search"><Search size={16}/><input aria-label="Search photos and tags" placeholder="Search photos or tags…" value={query} onChange={e=>{setQuery(e.target.value);setView('gallery');}}/>{query&&<button onClick={()=>setQuery('')} aria-label="Clear search"><X size={14}/></button>}</div><label className="sort"><SlidersHorizontal size={15}/><select aria-label="Sort photographs" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select><ChevronDown size={13}/></label></div></div>
-      <div className="gallery-subline"><span>{view==='tags'?'A different way to see your collection':active==='all'?'A few favorites, and everything in between.':'Moments tagged #'+active}</span><label className="sample-toggle"><input type="checkbox" checked={showSamples} onChange={e=>setShowSamples(e.target.checked)}/> Include inspiration photos</label></div>
-      {loadError&&<div className="inline-error">Your saved library couldn’t be loaded. <button onClick={load}>Try again</button></div>}
-      {view==='tags'?<div className="tag-collection">{tags.map(t=>{const items=all.filter(p=>p.tags.includes(t));return <button className="tag-card" key={t} onClick={()=>chooseTag(t)}><img src={items[0].src} alt=""/><div><span>#{t}</span><small>{items.length} photographs <ArrowUpRight size={15}/></small></div></button>;})}</div>:filtered.length?<div className={'masonry'+(compact?' compact':'')}>{filtered.map((photo,i)=><article className={'photo-card photo-'+(i%6)} key={photo.id}><button onClick={()=>openPhoto(photo)} aria-label={'View '+photo.title}><img src={photo.src} alt={photo.title} loading={i<3?'eager':'lazy'}/><div className="photo-overlay"><div><span className="photo-category">{photo.tags[0]||'A LITTLE MOMENT'}</span><h3>{photo.title}</h3></div><span className="expand-photo"><ArrowUpRight size={19}/></span></div></button><div className="photo-meta">{photo.tags.slice(0,3).map(t=><button key={t} onClick={()=>chooseTag(t)}>#{t}</button>)}{photo.sample&&<span className="sample-mark" title="An inspiration photo to help you get started">inspiration</span>}</div></article>)}</div>:<div className="empty-state"><ImagePlus size={35}/><h3>{query||active!=='all'?'No moments found.':'Your next chapter starts here.'}</h3><p>{query||active!=='all'?'Try another tag or a different search.':'Upload your first photographs and make this space your own.'}</p><button className="button primary" onClick={()=>{if(query||active!=='all'){setQuery('');setActive('all');}else setUploadOpen(true);}}>{query||active!=='all'?'Clear filters':'Upload photos'}</button></div>}
-      <div className="gallery-end"><span className="end-line"/><Aperture size={18}/><span className="end-line"/></div>
-      <section className="upload-invitation"><div className="invitation-icon"><ImagePlus size={25} strokeWidth={1.3}/></div><div><h3>There’s always another moment.</h3><p>Add a few photographs. Give them a tag. Make them a part of your story.</p></div><button className="button secondary" onClick={()=>setUploadOpen(true)}>Add your photos <ArrowUpRight size={16}/></button></section>
+      <section className={'library' + (activeAlbum ? ' album-photo-library' : '')} aria-label="Photo library">
+        {!activeAlbum && galleryControls}
+        {filtered.length ? <PhotoCollection key={collectionKey} photos={filtered} paginated={Boolean(activeAlbum)} renderPhoto={(photo, index) => <article className="photo-card" key={photo.id}>
+            <button onClick={() => openPhoto(photo)} aria-label={photo.title ? 'View ' + photo.title : 'View photo ' + (index + 1)}>
+              <OptimizedImage src={photo.src} alt={photo.title || 'Photograph ' + (index + 1)} sizes={gallerySizes} thumbnail/>
+              <div className="photo-overlay"><div>{photo.title && <h3>{photo.title}</h3>}</div><span className="expand-photo"><ArrowUpRight size={19}/></span></div>
+            </button>
+            <div className="photo-meta">{tags.filter(tag => photo.tags.includes(tag)).slice(0, 3).map(tag => <button key={tag} onClick={() => chooseTag(tag)}>#{tag}</button>)}</div>
+            {showPhotoIds && <div className="photo-id"><span>Photo ID</span><code>{photo.id}</code></div>}
+          </article>}/> : <div className="empty-state"><ImagePlus size={35}/><h3>{query || activeTags.length ? 'No moments found.' : 'The next chapter is on its way.'}</h3><p>{query || activeTags.length ? 'Try different tags or clear the filters.' : 'New photographs will appear here soon.'}</p>{(query || activeTags.length > 0) && <button className="button primary" onClick={() => updateLocation({query: '', tags: [], photoId: null})}>Clear filters</button>}</div>}
       </section>
-    </main><footer><a className="footer-brand" href="/">stillframe.</a><span>A little space for the way you see the world.</span><a className="back-top" href="#" onClick={e=>{e.preventDefault();window.scrollTo({top:0,behavior:'smooth'});}}>Back to top <ArrowDown size={14}/></a></footer>
-    {notice&&<div className="toast" role="status"><Check size={18}/>{notice}</div>}
-    <dialog ref={dialog} className={selected?'modal photo-modal':'modal upload-modal'} onCancel={e=>{e.preventDefault();close();}} onClick={e=>{if(e.target===e.currentTarget)close();}} aria-labelledby="dialog-title">
-      {(uploadOpen||selected)&&<button className="close-modal" onClick={close} disabled={busy} aria-label="Close dialog"><X size={21}/></button>}
-      {uploadOpen&&<div className="upload-content"><span className="eyebrow">GROW YOUR COLLECTION</span><h2 id="dialog-title">A moment worth <em>keeping.</em></h2><p>Add your photos and a few tags. We’ll take care of the rest.</p><div className={'dropzone'+(dragging?' dragging':'')} onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);if(!busy)addFiles(e.dataTransfer.files);}}><Upload size={30} strokeWidth={1.4}/><strong>Drop your photographs here</strong><span>or choose them from your device</span><button disabled={busy} className="button secondary" onClick={()=>input.current?.click()}><Plus size={16}/>Choose photos</button><small>JPG, PNG, WebP, GIF or AVIF · Up to 20 MB each</small><input ref={input} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" hidden onChange={e=>{addFiles(e.target.files);e.target.value='';}}/></div>{files.length>0&&<div className="file-list">{files.map((f,i)=><div key={i}><span>{f.name}</span><small>{(f.size/1024/1024).toFixed(1)} MB</small><button aria-label={'Remove '+f.name} disabled={busy} onClick={()=>setFiles(prev=>prev.filter((_,j)=>i!==j))}><X size={15}/></button></div>)}</div>}<label className="field-label" htmlFor="upload-tags"><Tag size={14}/>Add tags</label><input id="upload-tags" className="text-field" placeholder="e.g. nature, travel, golden hour" value={uploadTags} maxLength={800} onChange={e=>setUploadTags(e.target.value)} disabled={busy}/><p className="field-hint">Separate tags with commas. You can edit them later.</p>{error&&<p className="form-error" role="alert">{error}</p>}<button className="button primary upload-submit" disabled={!files.length||busy} onClick={upload}><Upload size={17}/>{busy?progress:files.length?'Upload '+files.length+' photo'+(files.length===1?'':'s'):'Upload photos'}</button></div>}
-      {selected&&<div className="viewer"><div className="viewer-image"><img src={selected.src} alt={selected.title}/><button className="prev" aria-label="Previous photo" onClick={()=>navigate(-1)}><ArrowLeft size={20}/></button><button className="next" aria-label="Next photo" onClick={()=>navigate(1)}><ArrowRight size={20}/></button></div><div className="viewer-details"><span className="eyebrow">{selected.sample?'FROM THE INSPIRATION COLLECTION':'FROM YOUR COLLECTION'}</span><h2 id="dialog-title">{selected.title}</h2>{selected.sample?<><div className="viewer-tags">{selected.tags.map(t=><button className="tag-pill" key={t} onClick={()=>{chooseTag(t);close();}}>#{t}</button>)}</div><p className="field-hint">An inspiration photograph. Upload your own to start your personal collection.</p><button className="button secondary" onClick={()=>{setSelected(null);setUploadOpen(true);}}>Add your own <Plus size={16}/></button></>:<><label htmlFor="edit-title" className="field-label">Photo title</label><input id="edit-title" className="text-field" value={editTitle} maxLength={120} onChange={e=>setEditTitle(e.target.value)}/><label htmlFor="edit-tags" className="field-label">Tags</label><input id="edit-tags" className="text-field" value={editTags} maxLength={800} onChange={e=>setEditTags(e.target.value)}/><p className="field-hint">Separate tags with commas.</p>{error&&<p role="alert" className="form-error">{error}</p>}<button className="button primary" onClick={save} disabled={busy||!editTitle.trim()}>{busy?'Saving…':'Save changes'}<Check size={16}/></button></>}</div></div>}
+      {activeAlbum && <AlbumNavigation album={activeAlbum} previous={previousAlbum} next={nextAlbum} photos={photos} onOpen={openAlbum} onBack={backToAlbums} onShowAll={showAllPhotos}/>}
+    </main>
+    </div>
+    <SiteFooter/>
+    <dialog ref={dialog} className={'modal photo-modal' + (isPanorama ? ' panorama-modal' : '')} onCancel={event => {event.preventDefault(); close();}} onClick={event => {if (event.target === event.currentTarget) close();}} aria-labelledby={selected?.title ? 'dialog-title' : undefined} aria-label={selected?.title ? undefined : isPanorama ? 'Panorama viewer' : 'Photo viewer'} aria-describedby={selected?.description ? 'photo-description' : undefined}>
+      {selected && <>
+        <button className="close-modal" onClick={close} aria-label="Close photo"><X size={21}/></button>
+        <div className={'viewer' + (hasPhotoDetails ? '' : ' viewer-image-only')}>
+          <div className="viewer-image">
+            {isPanorama ? <PanoramaPhoto key={selected.src} src={selected.src} alt={selected.title || 'Selected panorama'} panStart={selected.panStart}/> : <OriginalPhoto key={selected.src} src={selected.src} alt={selected.title || 'Selected photograph'} fullWidth={!hasPhotoDetails}/>}
+            <button className="prev" aria-label="Previous photo" disabled={!filtered.length || (filtered.length === 1 && filtered[0].id === selected.id)} onClick={() => navigate(-1)}><ArrowLeft size={20}/></button>
+            <button className="next" aria-label="Next photo" disabled={!filtered.length || (filtered.length === 1 && filtered[0].id === selected.id)} onClick={() => navigate(1)}><ArrowRight size={20}/></button>
+          </div>
+          {hasPhotoDetails && <div key={selected.id} className="viewer-details">
+            {selected.title && <h2 id="dialog-title">{selected.title}</h2>}
+            {selected.description && <p id="photo-description" className="viewer-description">{selected.description}</p>}
+          </div>}
+        </div>
+        {selected.tags.some(tag => !activeAlbum || tags.includes(tag)) && <div className="viewer-tags viewer-tags-footer" role="group" aria-label="Photo tags">
+          {tags.filter(tag => selected.tags.includes(tag)).map(tag => tagButton(tag, false))}
+        </div>}
+        {showPhotoIds && <div className="photo-id viewer-photo-id"><span>Photo ID</span><code>{selected.id}</code></div>}
+      </>}
     </dialog>
   </>;
 }

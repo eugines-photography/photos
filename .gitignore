@@ -11,6 +11,8 @@
 
 # Generated builds and framework state
 /dist/
+/public/generated/
+/content/generated/
 /.next/
 /.vinext/
 /out/
