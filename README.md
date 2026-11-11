@@ -157,7 +157,7 @@ Removing the metadata first keeps every intermediate build valid.
 
 During GitHub Actions builds, the repository name is detected automatically. Setting it here also enables the **Manage photos on GitHub** link in local previews. This link leads to GitHub's repository interface; visitors must have repository write permissions to edit.
 
-Set `"showPhotoIds": true` to display each photo's metadata ID beneath gallery and album photos and below the opened photo in the viewer. IDs are selectable for easy copying into `photos.json` or `albums.json`. Set it back to `false` to hide them. This is a code/configuration setting, with no visitor-facing toggle.
+Set `"showPhotoIds": true` to display each photo's metadata ID beneath gallery and album photos and below the opened photo in the viewer during local development (`npm run dev`). IDs are selectable for easy copying into `photos.json` or `albums.json`. Set it back to `false` to hide them locally. Production builds always hide these labels, including on GitHub Pages and in `npm run preview`, even if the setting is `true`. This is a code/configuration setting, with no visitor-facing toggle.
 
 For a custom domain, configure it in **Settings → Pages** and add the domain to `public/CNAME` if required by your Pages configuration. The workflow reads the current Pages base path automatically.
 
@@ -174,7 +174,9 @@ The homepage, Explore albums page, and About Me page share an asynchronous Umami
 
 Use the actual website UUID from Umami, not the placeholder above. For self-hosted Umami, use your own HTTPS script URL. The website ID is public tracking configuration; no Umami password or API key belongs in the site files. Leave `websiteId` empty to disable analytics.
 
-Run `npm run build` and publish the updated site. Tracking runs only in production builds on non-localhost domains, so `npm run dev` and loopback previews do not inflate your statistics. Umami's automatic navigation tracking handles the gallery's album, photo, and tag URL changes; query parameters are retained, while scroll anchors such as `#albums` are excluded. Blocking the analytics script does not prevent the gallery from loading.
+Run `npm run build` and publish the updated site. Tracking runs only in production builds on non-localhost domains, so `npm run dev` and loopback previews do not inflate your statistics. Umami's automatic navigation tracking handles the gallery's album, photo, and tag URL changes. Before a pageview is sent, the album and photo query parameters become distinct reporting paths and titles: for example `/photos/?album=landscapes&photo=dsc-7833` is reported as `/photos/album/landscapes/photo/dsc-7833/`, titled **Photo dsc-7833 · Album landscapes**. Opening a photo from the full gallery reports `/photos/photo/dsc-7833/`. Remaining query parameters are retained, while scroll anchors such as `#albums` are excluded. Blocking the analytics script does not prevent the gallery from loading.
+
+Look for these paths in Umami's Pages and session views to identify which photographs were opened. These are analytics-only labels, not public routes: use the normal `?album=...&photo=...` URLs to share or open a photograph. The labels apply to new visits after deployment; existing session records keep their original URLs. The hook changes existing pageview payloads without sending additional pageviews. Gallery thumbnails scrolling into view are not counted as opened photos.
 
 Visit the published site and check your Umami dashboard to verify incoming visits. See Umami's [tracking setup](https://docs.umami.is/docs/collect-data) and [tracker configuration](https://docs.umami.is/docs/tracker-configuration).
 

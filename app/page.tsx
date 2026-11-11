@@ -26,7 +26,7 @@ const photos = parsePhotos(manifest);
 const albums = parseAlbums(albumManifest, photos);
 const featured = featuredPhotos(photos, imageAssets);
 const homePhoto = homepagePhoto(photos, site.homePhotoId);
-const showPhotoIds = 'showPhotoIds' in site && site.showPhotoIds === true;
+const showPhotoIds = import.meta.env.DEV && 'showPhotoIds' in site && site.showPhotoIds === true;
 
 export default function Gallery() {
   const [locationState, updateLocation] = useGalleryUrl(photos, albums);

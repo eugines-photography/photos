@@ -1,4 +1,24 @@
 export type UmamiConfig = {websiteId: string; scriptUrl: string};
+export type UmamiPayload = Record<string, unknown>;
+
+// Reporting paths only: the browser continues using GitHub Pages-compatible query URLs.
+export function labelGalleryPageview(type: string, payload: UmamiPayload, base: string): UmamiPayload {
+  if (type !== 'event' || payload.name || typeof payload.url !== 'string') return payload;
+  let url: URL;
+  try {url = new URL(payload.url, 'https://gallery.invalid');} catch {return payload;}
+  const prefix = base.replace(/\/$/, '') + '/';
+  if (url.pathname !== prefix && url.pathname !== prefix + 'index.html') return payload;
+  const album = url.searchParams.get('album');
+  const photo = url.searchParams.get('photo');
+  if (!album && !photo) return payload;
+  let path = prefix;
+  if (album) path += 'album/' + encodeURIComponent(album) + '/';
+  if (photo) path += 'photo/' + encodeURIComponent(photo) + '/';
+  const title = photo ? `Photo ${photo}${album ? ' · Album ' + album : ''}` : `Album ${album}`;
+  url.searchParams.delete('album');
+  url.searchParams.delete('photo');
+  return {...payload, url: path + url.search, title};
+}
 
 export function parseUmamiConfig(input: unknown): UmamiConfig | null {
   if (input === undefined) return null;
@@ -26,5 +46,6 @@ export function installUmami(config: UmamiConfig | null, document: Pick<Document
   script.setAttribute('data-website-id', config.websiteId);
   // Keep album/photo/tag query parameters, but ignore scroll anchors.
   script.setAttribute('data-exclude-hash', 'true');
+  script.setAttribute('data-before-send', 'stillframeUmamiBeforeSend');
   document.head.appendChild(script);
 }

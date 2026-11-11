@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {installUmami, parseUmamiConfig} from '../app/analytics.ts';
+import {installUmami, labelGalleryPageview, parseUmamiConfig} from '../app/analytics.ts';
 
 const config = {websiteId: '12345678-1234-1234-1234-123456789abc', scriptUrl: 'https://cloud.umami.is/script.js'};
 
@@ -47,6 +47,35 @@ test('published pages load one nonblocking tracker with query tracking and no sc
   assert.equal(script.async, true);
   assert.equal(script.attributes['data-website-id'], config.websiteId);
   assert.equal(script.attributes['data-exclude-hash'], 'true');
+  assert.equal(script.attributes['data-before-send'], 'stillframeUmamiBeforeSend');
   assert.equal(script.attributes['data-exclude-search'], undefined);
   assert.equal(script.attributes['data-auto-track'], undefined);
+});
+
+test('album and opened photo pageviews get distinct paths and titles on root and project sites', () => {
+  for (const base of ['/', '/photos/']) {
+    const original = {url: `${base}?album=landscapes&photo=dsc-7833#gallery`, title: 'Photography', website: config.websiteId};
+    const labeled = labelGalleryPageview('event', original, base);
+    assert.equal(labeled.url, `${base}album/landscapes/photo/dsc-7833/`);
+    assert.equal(labeled.title, 'Photo dsc-7833 · Album landscapes');
+    assert.equal(labeled.website, config.websiteId);
+    assert.equal(original.url, `${base}?album=landscapes&photo=dsc-7833#gallery`);
+    assert.equal(labelGalleryPageview('event', {url: `${base}?album=landscapes`}, base).url, `${base}album/landscapes/`);
+    assert.equal(labelGalleryPageview('event', {url: `${base}index.html?photo=dsc-7833`}, base).url, `${base}photo/dsc-7833/`);
+    assert.equal(labelGalleryPageview('event', {url: `${base}?photo=dsc-0471`}, base).url, `${base}photo/dsc-0471/`);
+  }
+});
+
+test('reporting preserves filters, encodes IDs, and leaves other pages and named events alone', () => {
+  const result = labelGalleryPageview('event', {url: '/photos/?photo=photo%2Fone&tags=nature&tags=travel'}, '/photos/');
+  assert.equal(result.url, '/photos/photo/photo%2Fone/?tags=nature&tags=travel');
+  for (const url of ['/photos/', '/photos/about.html', '/photos/albums.html', '/elsewhere/?photo=one']) {
+    const payload = {url, title: 'Existing title'};
+    assert.equal(labelGalleryPageview('event', payload, '/photos/'), payload);
+  }
+  const custom = {url: '/photos/?photo=one', name: 'custom event'};
+  assert.equal(labelGalleryPageview('event', custom, '/photos/'), custom);
+  const session = {url: '/photos/?photo=one'};
+  assert.equal(labelGalleryPageview('identify', session, '/photos/'), session);
+  assert.deepEqual(labelGalleryPageview('event', {}, '/photos/'), {});
 });

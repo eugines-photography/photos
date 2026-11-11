@@ -1,7 +1,7 @@
 {
   "name": "Eugines Photography",
   "homePhotoId": "dsc-9039-9058",
-  "showPhotoIds": true,
+  "showPhotoIds": false,
   "githubRepository": "",
   "umami": {
     "websiteId": "ca918ddf-6384-4916-9d5c-86c4e0cf1898",
