@@ -144,18 +144,17 @@ Removing the metadata first keeps every intermediate build valid.
 
 ## Configure the site
 
-`content/site.json` contains the display name, homepage photo ID, and an optional repository name:
+`content/site.json` contains the display name, homepage photo ID, local photo ID display setting, and optional analytics configuration:
 
 ```json
 {
   "name": "Stillframe",
   "homePhotoId": "dsc-9615-9621",
-  "showPhotoIds": false,
-  "githubRepository": "YOUR-USERNAME/YOUR-REPOSITORY"
+  "showPhotoIds": false
 }
 ```
 
-During GitHub Actions builds, the repository name is detected automatically. Setting it here also enables the **Manage photos on GitHub** link in local previews. This link leads to GitHub's repository interface; visitors must have repository write permissions to edit.
+Manage photographs directly in your GitHub repository by editing the content files and photo uploads.
 
 Set `"showPhotoIds": true` to display each photo's metadata ID beneath gallery and album photos and below the opened photo in the viewer during local development (`npm run dev`). IDs are selectable for easy copying into `photos.json` or `albums.json`. Set it back to `false` to hide them locally. Production builds always hide these labels, including on GitHub Pages and in `npm run preview`, even if the setting is `true`. This is a code/configuration setting, with no visitor-facing toggle.
 
